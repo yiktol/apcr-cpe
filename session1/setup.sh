@@ -2,7 +2,7 @@
 
 # Default values for parameters
 DEFAULT_DIRECTORY=/home/ubuntu/CODE/environment/apcr-cpe/session1
-DEFAULT_PORT=8076
+DEFAULT_PORT=8088
 DEFAULT_APP_FILE="Home.py"
 DEFAULT_REQUIREMENTS_FILE="requirements.txt"
 DEFAULT_APP_NAME=""  # Will be derived from APP_FILE if not provided
