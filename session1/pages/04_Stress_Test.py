@@ -352,13 +352,10 @@ def main():
 
 # Main execution flow
 if __name__ == "__main__":
-    try:
-        # First check authentication
-        is_authenticated = authenticate.login()
-        
-        # If authenticated, show the main app content
-        if is_authenticated:
-            main()
-    except Exception as e:
-        logger.critical(f"Critical application error: {str(e)}", exc_info=True)
-        st.error("A critical error occurred. Please contact the administrator.")
+    # First check authentication
+    is_authenticated = authenticate.login()
+    
+    # If authenticated, show the main app content
+    if is_authenticated:
+        main()
+
