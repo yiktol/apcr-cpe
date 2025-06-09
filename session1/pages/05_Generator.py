@@ -376,10 +376,10 @@ def render_config_section() -> None:
     
     st.slider(
         "Delay between records (seconds)", 
-        min_value=0.5, 
-        max_value=10.0, 
+        min_value=0.1, 
+        max_value=1.0, 
         value=st.session_state['delay'], 
-        step=0.5,
+        step=0.1,
         key="config_delay",
         on_change=lambda: setattr(st.session_state, 'delay', st.session_state.config_delay)
     )
@@ -456,8 +456,6 @@ def render_main_content() -> None:
         render_config_section()
         st.markdown("---")
         render_sample_data()
-        st.markdown("---")
-        render_about_section()
     
     with col2:
         # Right side - Status indicator and log display
@@ -486,6 +484,7 @@ def main() -> None:
     with st.sidebar:
     # Render the sidebar
         common.render_sidebar()
+        render_about_section()
         
     # Process any queued logs from the worker thread
     logs_updated = process_log_queue()
