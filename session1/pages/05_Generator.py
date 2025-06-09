@@ -1,3 +1,4 @@
+
 """
 Coffee shop sales data generator and sender.
 
@@ -6,18 +7,22 @@ and sends it to a REST endpoint. It simulates a point-of-sale system
 generating sales records in real-time.
 """
 
-import streamlit as st
 import json
+import logging
+import queue
 import random
+import threading
 import time
 import uuid
-import logging
-from typing import Dict, Any, List, Tuple
-import requests
-import threading
-from faker import Faker
-import queue
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+
+import requests
+import streamlit as st
+from faker import Faker
+
+import utils.authenticate as authenticate
+import utils.common as common
 
 # ----------------------
 # Configuration Constants
@@ -32,7 +37,7 @@ DEFAULT_DELAY = 1.0  # seconds
 AUTO_REFRESH_RATE = 0.5  # seconds - faster refresh for better real-time feeling
 MAX_LOGS_DISPLAY = 1000  # Maximum number of logs to display
 
-# Thread-safe queue for communication between threads
+# Thread-safe queues for communication between threads
 log_queue = queue.Queue()
 sample_data_queue = queue.Queue(maxsize=1)  # Hold the current sample data
 
@@ -40,33 +45,40 @@ sample_data_queue = queue.Queue(maxsize=1)  # Hold the current sample data
 # Setup Functions
 # ----------------------
 
-def setup_logging():
-    """Configure the logging system"""
+def setup_logging() -> logging.Logger:
+    """
+    Configure the logging system.
+    
+    Returns:
+        logging.Logger: Configured logger instance
+    """
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
     return logging.getLogger('coffee_sales_generator')
 
-def initialize_session_state():
-    """Initialize all required session state variables"""
-    if 'running' not in st.session_state:
-        st.session_state['running'] = False
-    if 'logs' not in st.session_state:
-        st.session_state['logs'] = []
-    if 'endpoint_url' not in st.session_state:
-        st.session_state['endpoint_url'] = DEFAULT_ENDPOINT_URL
-    if 'delay' not in st.session_state:
-        st.session_state['delay'] = DEFAULT_DELAY
-    if 'auto_refresh' not in st.session_state:
-        st.session_state['auto_refresh'] = True
-    if 'stop_flag' not in st.session_state:
-        st.session_state['stop_flag'] = False
+def initialize_session_state() -> None:
+    """Initialize all required session state variables."""
+    session_vars = {
+        'running': False,
+        'logs': [],
+        'endpoint_url': DEFAULT_ENDPOINT_URL,
+        'delay': DEFAULT_DELAY,
+        'auto_refresh': True,
+        'stop_flag': False,
+        'last_sample_time': time.time()
+    }
+    
+    # Initialize variables if they don't exist
+    for var, default in session_vars.items():
+        if var not in st.session_state:
+            st.session_state[var] = default
+    
+    # Initialize sample_data separately as it requires generation
     if 'sample_data' not in st.session_state:
         fake = Faker()
         st.session_state['sample_data'] = generate_sale_record(fake)
-    if 'last_sample_time' not in st.session_state:
-        st.session_state['last_sample_time'] = time.time()
 
 # ----------------------
 # Data Generation Functions
@@ -105,7 +117,6 @@ def generate_sale_record(faker: Faker) -> Dict[str, Any]:
         }
     }
     
-
 def send_message(record: Dict[str, Any], endpoint_url: str, logger: logging.Logger) -> Tuple[bool, Any]:
     """
     Send a coffee sale record to the endpoint.
@@ -118,23 +129,42 @@ def send_message(record: Dict[str, Any], endpoint_url: str, logger: logging.Logg
     Returns:
         Tuple[bool, Any]: (Success status, Response or error message)
     """
-    data = json.dumps({k: v for k, v in record.items() if k != '_meta'})
-    headers = {'Content-Type': 'application/json'}
+    # Remove metadata before sending
+    data = {k: v for k, v in record.items() if k != '_meta'}
     
     try:
-        response = requests.post(endpoint_url, data=data, headers=headers, timeout=5)
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(
+            endpoint_url, 
+            data=json.dumps(data), 
+            headers=headers, 
+            timeout=5
+        )
         response.raise_for_status()
         return True, response.status_code
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Connection error: {str(e)}")
+        return False, f"Connection error: {str(e)}"
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Request timed out: {str(e)}")
+        return False, f"Request timed out: {str(e)}"
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"HTTP error: {str(e)}")
+        return False, f"HTTP error: {str(e)}"
     except requests.exceptions.RequestException as e:
-        return False, str(e)
+        logger.error(f"Request error: {str(e)}")
+        return False, f"Request error: {str(e)}"
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        return False, f"Unexpected error: {str(e)}"
 
 # ----------------------
 # Threading Functions
 # ----------------------
 
-def add_to_log_queue(message: str, level: str = "INFO"):
+def add_to_log_queue(message: str, level: str = "INFO") -> None:
     """
-    Add a log message to the log queue for processing in the main thread
+    Add a log message to the log queue for processing in the main thread.
     
     Args:
         message: The log message
@@ -146,8 +176,13 @@ def add_to_log_queue(message: str, level: str = "INFO"):
     # Add to queue for the main thread to process
     log_queue.put(formatted_log)
 
-def process_log_queue():
-    """Process any logs in the queue and add them to session state logs"""
+def process_log_queue() -> bool:
+    """
+    Process any logs in the queue and add them to session state logs.
+    
+    Returns:
+        bool: True if logs were updated, False otherwise
+    """
     updated = False
     while not log_queue.empty():
         try:
@@ -162,8 +197,13 @@ def process_log_queue():
             break
     return updated
 
-def update_sample_data():
-    """Update sample data at the same rate as the delay timer"""
+def update_sample_data() -> bool:
+    """
+    Update sample data at the same rate as the delay timer.
+    
+    Returns:
+        bool: True if sample data was updated, False otherwise
+    """
     now = time.time()
     elapsed = now - st.session_state['last_sample_time']
     
@@ -185,7 +225,12 @@ def update_sample_data():
     
     return False
 
-def data_generation_worker(delay: float, endpoint_url: str, logger: logging.Logger, stop_flag_event: threading.Event):
+def data_generation_worker(
+    delay: float, 
+    endpoint_url: str, 
+    logger: logging.Logger, 
+    stop_flag_event: threading.Event
+) -> None:
     """
     Worker function to generate and send data at regular intervals.
     
@@ -249,8 +294,8 @@ def data_generation_worker(delay: float, endpoint_url: str, logger: logging.Logg
 # UI Action Handlers
 # ----------------------
 
-def handle_start_button():
-    """Handle the Start button click"""
+def handle_start_button() -> None:
+    """Handle the Start button click."""
     if st.session_state['running']:
         return
     
@@ -283,8 +328,8 @@ def handle_start_button():
     logger.info(log_message)
     st.session_state['logs'].append(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [INFO] {log_message}")
 
-def handle_stop_button():
-    """Handle the Stop button click"""
+def handle_stop_button() -> None:
+    """Handle the Stop button click."""
     if not st.session_state['running']:
         return
     
@@ -300,8 +345,8 @@ def handle_stop_button():
     logger.info(log_message)
     st.session_state['logs'].append(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [INFO] {log_message}")
 
-def handle_clear_logs():
-    """Handle the Clear Logs button click"""
+def handle_clear_logs() -> None:
+    """Handle the Clear Logs button click."""
     st.session_state['logs'] = []
     log_message = "Logs cleared"
     st.session_state['logs'].append(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [INFO] {log_message}")
@@ -310,96 +355,139 @@ def handle_clear_logs():
 # UI Rendering Functions
 # ----------------------
 
-def render_page_config():
-    """Configure the Streamlit page settings"""
+def render_page_config() -> None:
+    """Configure the Streamlit page settings."""
     st.set_page_config(
         page_title="Coffee Sales Generator",
         page_icon="☕",
         layout="wide"
     )
 
-def render_sidebar():
-    """Render the sidebar configuration elements"""
-    with st.sidebar:
-        st.header("Configuration")
-        
-        endpoint_url = st.text_input(
-            "API Endpoint URL", 
-            value=st.session_state['endpoint_url']
-        )
-        if endpoint_url != st.session_state['endpoint_url']:
-            st.session_state['endpoint_url'] = endpoint_url
-        
-        delay = st.slider(
-            "Delay between records (seconds)", 
-            min_value=0.5, 
-            max_value=10.0, 
-            value=st.session_state['delay'], 
-            step=0.5
-        )
-        if delay != st.session_state['delay']:
-            st.session_state['delay'] = delay
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if not st.session_state['running']:
-                st.button("▶️ Start", on_click=handle_start_button, use_container_width=True)
-            else:
-                st.button("⏹️ Stop", on_click=handle_stop_button, use_container_width=True)
-        with col2:
-            st.button("🗑️ Clear Logs", on_click=handle_clear_logs, use_container_width=True)
-        
-        # Auto-refresh control
-        auto_refresh = st.checkbox(
-            "Auto-refresh logs", 
-            value=st.session_state['auto_refresh']
-        )
-        if auto_refresh != st.session_state['auto_refresh']:
-            st.session_state['auto_refresh'] = auto_refresh
-        
-        with st.expander("Sample Data Preview", expanded=True):
-            # This will show the current sample data that updates at the same rate as the delay
-            st.json(st.session_state['sample_data'])
+def render_config_section() -> None:
+    """Render the configuration section of the application."""
+    st.header("Configuration")
+    
+    st.text_input(
+        "API Endpoint URL", 
+        value=st.session_state['endpoint_url'],
+        key="config_endpoint_url",
+        on_change=lambda: setattr(st.session_state, 'endpoint_url', st.session_state.config_endpoint_url)
+    )
+    
+    st.slider(
+        "Delay between records (seconds)", 
+        min_value=0.5, 
+        max_value=10.0, 
+        value=st.session_state['delay'], 
+        step=0.5,
+        key="config_delay",
+        on_change=lambda: setattr(st.session_state, 'delay', st.session_state.config_delay)
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if not st.session_state['running']:
+            st.button("▶️ Start", on_click=handle_start_button, use_container_width=True)
+        else:
+            st.button("⏹️ Stop", on_click=handle_stop_button, use_container_width=True)
+    with col2:
+        st.button("🗑️ Clear Logs", on_click=handle_clear_logs, use_container_width=True)
+    
+    # Auto-refresh control
+    st.checkbox(
+        "Auto-refresh logs",
+        value=st.session_state['auto_refresh'],
+        key="config_auto_refresh",
+        on_change=lambda: setattr(st.session_state, 'auto_refresh', st.session_state.config_auto_refresh)
+    )
 
-def render_main_content():
-    """Render the main content area"""
+def render_about_section() -> None:
+    """Render the about section of the application."""
+    with st.expander("About this Application", expanded=False):
+        st.markdown("""
+        ## Coffee Shop Sales Data Generator
+        
+        This application simulates a point-of-sale system generating coffee shop sales records in real-time. 
+        It creates random transaction data based on realistic coffee orders and sends them to a configurable 
+        API endpoint.
+        
+        ### Features:
+        - Customizable sending rate (delay between records)
+        - Real-time log display
+        - Sample data preview
+        - Configurable API endpoint
+        
+        This tool is useful for testing data pipeline integrations, streaming analytics, 
+        and demonstrating real-time data processing capabilities.
+        """)
+
+def render_sample_data() -> None:
+    """Render the sample data preview."""
+    with st.expander("Sample Data Preview", expanded=True):
+        # This will show the current sample data that updates at the same rate as the delay
+        st.json(st.session_state['sample_data'])
+
+def render_log_display() -> None:
+    """Render the log display section."""
+    st.header("Activity Logs")
+    
+    if st.session_state['logs']:
+        for log in reversed(st.session_state['logs'][-MAX_LOGS_DISPLAY:]):
+            st.text(log)
+        
+        st.text(f"Total log entries: {len(st.session_state['logs'])}")
+    else:
+        st.info("No logs yet. Start the generator to see activity.")
+
+def render_footer() -> None:
+    """Render the application footer."""
+    st.markdown("---")
+    st.markdown("© 2025, Amazon Web Services, Inc. or its affiliates. All rights reserved.")
+
+def render_main_content() -> None:
+    """Render the main content area with a 50/50 layout."""
     st.title("☕ Coffee Shop Sales Generator")
     
-    # Status indicator
-    status = st.empty()
-    if st.session_state['running']:
-        status.success("✅ Generator is running")
-    else:
-        status.warning("⏸️ Generator is stopped")
+    # Split the screen into two columns for 50/50 layout
+    col1, col2 = st.columns(2)
     
-    # Log display
-    st.subheader("Activity Logs")
-    log_container = st.container()
+    with col1:
+        # Left side - Configuration and about sections
+        render_config_section()
+        st.markdown("---")
+        render_sample_data()
+        st.markdown("---")
+        render_about_section()
     
-    with log_container:
-        if st.session_state['logs']:
-            for log in reversed(st.session_state['logs'][-MAX_LOGS_DISPLAY:]):
-                st.text(log)
+    with col2:
+        # Right side - Status indicator and log display
+        if st.session_state['running']:
+            st.success("✅ Generator is running")
         else:
-            st.info("No logs yet. Start the generator to see activity.")
+            st.warning("⏸️ Generator is stopped")
+        
+        # Log display
+        render_log_display()
     
-    # Display total records count
-    if st.session_state['logs']:
-        st.text(f"Total log entries: {len(st.session_state['logs'])}")
+    # Footer spans the full width
+    render_footer()
 
 # ----------------------
 # Main Application Logic
 # ----------------------
 
-def main():
-    
-    """Main application entry point"""
+def main() -> None:
+    """Main application entry point."""
     # Setup
     render_page_config()
 
     logger = setup_logging()
     initialize_session_state()
     
+    with st.sidebar:
+    # Render the sidebar
+        common.render_sidebar()
+        
     # Process any queued logs from the worker thread
     logs_updated = process_log_queue()
     
@@ -407,7 +495,6 @@ def main():
     sample_updated = update_sample_data()
     
     # Render UI components
-    render_sidebar()
     render_main_content()
     
     # Handle auto-refresh if needed
@@ -416,4 +503,16 @@ def main():
         st.rerun()
 
 if __name__ == "__main__":
-    main()
+    try:
+        # First check authentication
+        is_authenticated = authenticate.login()
+        
+        # If authenticated, show the main app content
+        if is_authenticated:
+            main()
+    except Exception as e:
+        # Log and display any uncaught exceptions
+        logger = logging.getLogger('coffee_sales_generator')
+        logger.exception(f"Uncaught application error: {str(e)}")
+        st.error(f"An unexpected error occurred: {str(e)}")
+        st.exception(e)
