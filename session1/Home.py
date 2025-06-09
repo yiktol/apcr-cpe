@@ -9,7 +9,8 @@ from PIL import Image
 import base64
 import time
 import random
-
+import utils.authenticate as authenticate
+import utils.common as common
 # Set page configuration
 st.set_page_config(
     page_title="AWS Cloud Practitioner - Session 1",
@@ -1400,6 +1401,9 @@ def main():
     
     # Sidebar content
     with st.sidebar:
+        # Render the sidebar
+        common.render_sidebar()
+
         st.image("https://d1.awsstatic.com/training-and-certification/certification-badges/AWS-Certified-Cloud-Practitioner_badge.634f8a21af2e0e956ed8905a72366146ba22b74c.png", width=150)
         st.markdown("## AWS Cloud Practitioner")
         st.markdown("### Content Review Session 1")
@@ -1420,10 +1424,10 @@ def main():
             This application is designed to help prepare for the AWS Cloud Practitioner certification.
             """)
         
-        if st.button("Reset Session"):
-            reset_session()
+        # if st.button("Reset Session"):
+        #     reset_session()
         
-        st.markdown(f"**Session ID:** {st.session_state['session_id'][:8]}...")
+        # st.markdown(f"**Session ID:** {st.session_state['session_id'][:8]}...")
     
     # Main content tabs
     tabs = st.tabs(["🏠 Home", "💰 Value Proposition", "🌎 Global Infrastructure", "🛠️ AWS Services", "📝 Knowledge Check"])
@@ -1451,4 +1455,9 @@ def main():
     """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-    main()
+    # First check authentication
+    is_authenticated = authenticate.login()
+    
+    # If authenticated, show the main app content
+    if is_authenticated:
+        main()

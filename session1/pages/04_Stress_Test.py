@@ -323,6 +323,10 @@ def main():
     try:
         # Apply CSS Style
         common.apply_styles()
+
+        with st.sidebar:
+        # Render the sidebar
+            render_sidebar()
         
         # Set up page title and description
         st.title("EC2 Stress Test Tool")
@@ -340,8 +344,7 @@ def main():
         render_command_monitoring()
         render_help_section()
         
-        # Render the sidebar
-        render_sidebar()
+        
         
         # Add footer
         st.caption("© 2025, Amazon Web Services, Inc. or its affiliates. All rights reserved.")
@@ -352,10 +355,13 @@ def main():
 
 # Main execution flow
 if __name__ == "__main__":
-    # First check authentication
-    is_authenticated = authenticate.login()
-    
-    # If authenticated, show the main app content
-    if is_authenticated:
-        main()
-
+    try:
+        # First check authentication
+        is_authenticated = authenticate.login()
+        
+        # If authenticated, show the main app content
+        if is_authenticated:
+            main()
+    except Exception as e:
+        logger.critical(f"Critical application error: {str(e)}", exc_info=True)
+        st.error("A critical error occurred. Please contact the administrator.")
