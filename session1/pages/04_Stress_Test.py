@@ -326,7 +326,7 @@ def main():
         # Render the sidebar
             common.render_sidebar()
         
-        render_sidebar()
+        
         # Set up page title and description
         st.title("EC2 Stress Test Tool")
         st.write("This application sends stress test commands to EC2 instances with specified tags.")
@@ -334,6 +334,7 @@ def main():
         # Initialize session state
         init_session_state()
         
+        render_sidebar()
         # Render the region selector
         render_region_selector()
         
