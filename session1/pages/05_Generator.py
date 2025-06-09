@@ -479,7 +479,6 @@ def render_main_content() -> None:
 def main() -> None:
     """Main application entry point."""
     # Setup
-    render_page_config()
 
     logger = setup_logging()
     initialize_session_state()
@@ -503,6 +502,7 @@ def main() -> None:
         st.rerun()
 
 if __name__ == "__main__":
+    render_page_config()
     try:
         # First check authentication
         is_authenticated = authenticate.login()
