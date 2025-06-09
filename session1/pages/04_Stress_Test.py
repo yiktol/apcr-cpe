@@ -282,9 +282,7 @@ def render_help_section():
         """)
 
 def render_sidebar():
-    """Render the sidebar elements."""
-    common.render_sidebar()
-    
+   
     # Add about section to sidebar
     render_about_section()
     
@@ -326,8 +324,9 @@ def main():
 
         with st.sidebar:
         # Render the sidebar
-            render_sidebar()
+            common.render_sidebar()
         
+        render_sidebar()
         # Set up page title and description
         st.title("EC2 Stress Test Tool")
         st.write("This application sends stress test commands to EC2 instances with specified tags.")
@@ -343,8 +342,6 @@ def main():
         render_stop_button()
         render_command_monitoring()
         render_help_section()
-        
-        
         
         # Add footer
         st.caption("© 2025, Amazon Web Services, Inc. or its affiliates. All rights reserved.")
