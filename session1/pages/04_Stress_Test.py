@@ -5,7 +5,7 @@ import time
 import logging
 from datetime import datetime
 import utils.authenticate as authenticate
-import common
+import utils.common
 
 # Configure logging
 logging.basicConfig(
