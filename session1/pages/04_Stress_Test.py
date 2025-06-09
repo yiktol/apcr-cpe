@@ -28,7 +28,7 @@ def send_stress_command(target_tag_name, target_tag_value, stress_duration):
     """
     try:
         # Initialize AWS SSM client
-        ssm_client = boto3.client('ssm')
+        ssm_client = st.session_state.boto3_session.client('ssm')
         
         # Format the stress command with the specified duration
         stress_command = f"stress-ng --matrix 0 -t {stress_duration}m"
@@ -71,7 +71,7 @@ def stop_stress_command(target_tag_name, target_tag_value):
     """
     try:
         # Initialize AWS SSM client
-        ssm_client = boto3.client('ssm')
+        ssm_client = st.session_state.boto3_session.client('ssm')
         
         # Command to kill stress-ng processes
         stop_command = "pkill stress-ng"
@@ -112,7 +112,7 @@ def get_command_status(command_id):
         dict or str: Command status information or error message
     """
     try:
-        ssm_client = boto3.client('ssm')
+        ssm_client = st.session_state.boto3_session.client('ssm')
         response = ssm_client.list_command_invocations(
             CommandId=command_id,
             Details=True
@@ -315,6 +315,8 @@ def render_region_selector():
     except Exception as e:
         logger.error(f"Error creating boto3 session: {str(e)}")
         st.error(f"Error setting AWS region: {str(e)}")
+
+    return selected_region
 
 def main():
     """Main application function."""
