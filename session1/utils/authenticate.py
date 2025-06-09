@@ -63,7 +63,7 @@ def load_cognito_config() -> Dict[str, str]:
         # Log successful credential retrieval with masked values
         logger.info("Successfully retrieved Cognito credentials")
         required_keys = ["COGNITO_DOMAIN", "COGNITO_APP_CLIENT_ID", 
-                         "COGNITO_APP_CLIENT_SECRET","COGNITO_REDIRECT_URI_AIP_1"]
+                         "COGNITO_APP_CLIENT_SECRET","COGNITO_REDIRECT_URI_CPE_1"]
         
         # Check for required keys
         missing_keys = [key for key in required_keys if not credentials.get(key)]
@@ -74,7 +74,7 @@ def load_cognito_config() -> Dict[str, str]:
             "domain": credentials.get("COGNITO_DOMAIN"),
             "client_id": credentials.get("COGNITO_APP_CLIENT_ID"),
             "client_secret": credentials.get("COGNITO_APP_CLIENT_SECRET"),
-            "redirect_uri": credentials.get("COGNITO_REDIRECT_URI_AIP_1")
+            "redirect_uri": credentials.get("COGNITO_REDIRECT_URI_CPE_1")
         }
     except Exception as e:
         logger.error(f"Failed to retrieve Cognito credentials: {str(e)}")
