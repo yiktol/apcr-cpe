@@ -377,7 +377,7 @@ def render_ui() -> Dict:
     Returns:
         Dict: Dictionary containing the UI input values
     """
-    col1, col2 = st.columns([2, 1])
+    col1, col2, col3 = st.columns([2, 1, 1])
 
     with col1:
         target = st.text_input("Target IP/Domain",
@@ -404,8 +404,9 @@ def render_ui() -> Dict:
     with col2:
         end_port = st.number_input("End Port", min_value=1, max_value=65535, value=default_end)
 
-    with col3:
-        scan_options = st.expander("Scan Options")
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        scan_options = st.expander("Scan Options", expanded=True)
         with scan_options:
             col_a, col_b = st.columns(2)
             with col_a:
