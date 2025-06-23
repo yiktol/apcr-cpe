@@ -27,7 +27,7 @@ def render_sidebar():
     st.caption(f"**Session ID:** {st.session_state['auth_code'][:8]}")
     
 
-    if st.button("🔄 Reset Session"):
+    if st.button("🔄 Reset Session",use_container_width=True):
         reset_session()
         st.success("Session has been reset successfully!")
         st.rerun()  # Force a rerun to refresh the page
