@@ -212,8 +212,6 @@ def stop_experiment(experiment_id, region):
 def display_sidebar():
     """Display and handle sidebar UI elements."""
     with st.sidebar:
-        st.image("https://a0.awsstatic.com/libra-css/images/logos/aws_logo_smile_1200x630.png", width=100)
-        st.title("Experiment Controls")
         
         # Region selector
         st.header("AWS Region")
@@ -230,8 +228,6 @@ def display_sidebar():
             logger.info(f"Region changed to {selected_region}")
             st.success(f"Region set to {selected_region}")
             
-        st.divider()
-        
         # Experiment starters
         st.header("Start New Experiment")
         template_id = st.text_input("Experiment Template ID", "ABCDE1fgHIJkLmNop")
