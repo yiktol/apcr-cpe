@@ -53,7 +53,7 @@ def initialize_session_state():
     if 'refresh_interval' not in st.session_state:
         st.session_state.refresh_interval = 10
     if 'aws_region' not in st.session_state:
-        st.session_state.aws_region = "us-east-1"
+        st.session_state.aws_region = "ap-southeast-1"
 
 def reset_session():
     """Reset the session state to defaults."""
