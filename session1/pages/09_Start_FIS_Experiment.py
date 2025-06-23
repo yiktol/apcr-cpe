@@ -1,7 +1,8 @@
 """
 AWS Fault Injection Service (FIS) Experiment Manager.
 
-This Streamlit application allows users to start, monitor, and manage AWS FIS experiments.
+This Streamlit application allows users to start, monitor, and manage AWS FIS experiments
+across different AWS regions.
 """
 
 import logging
@@ -12,6 +13,7 @@ import boto3
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+
 import utils.authenticate as authenticate
 import utils.common as common
 
@@ -30,6 +32,16 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# List of available AWS regions where FIS is supported
+AWS_REGIONS = [
+    "us-east-1", "us-east-2", "us-west-1", "us-west-2",
+    "ap-northeast-1", "ap-northeast-2", "ap-northeast-3",
+    "ap-south-1", "ap-southeast-1", "ap-southeast-2",
+    "ca-central-1", "eu-central-1", "eu-north-1",
+    "eu-west-1", "eu-west-2", "eu-west-3",
+    "sa-east-1"
+]
+
 def initialize_session_state():
     """Initialize session state variables if they don't exist."""
     
@@ -40,13 +52,28 @@ def initialize_session_state():
         st.session_state.auto_refresh = False
     if 'refresh_interval' not in st.session_state:
         st.session_state.refresh_interval = 10
+    if 'aws_region' not in st.session_state:
+        st.session_state.aws_region = "us-east-1"
 
 def reset_session():
     """Reset the session state to defaults."""
     st.session_state.experiments = []
     st.session_state.auto_refresh = False
     st.session_state.refresh_interval = 10
+    # Keep the selected region
     logger.info("Session reset successfully")
+
+def get_boto3_client(service):
+    """
+    Get boto3 client for the specified service using the selected region.
+    
+    Args:
+        service: AWS service name (e.g., 'fis')
+        
+    Returns:
+        boto3 client object
+    """
+    return boto3.client(service, region_name=st.session_state.aws_region)
 
 def safe_timestamp_to_datetime(timestamp):
     """
@@ -80,29 +107,31 @@ def start_experiment(template_id):
         experiment data dictionary or None if error occurs
     """
     try:
-        client = boto3.client('fis')
+        client = get_boto3_client('fis')
         response = client.start_experiment(experimentTemplateId=template_id)
         experiment = response['experiment']
         experiment['_startRequestTime'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        experiment['_region'] = st.session_state.aws_region  # Store the region with the experiment
         st.session_state.experiments.append(experiment)
-        logger.info(f"Started experiment with ID: {experiment['id']}")
+        logger.info(f"Started experiment with ID: {experiment['id']} in region {st.session_state.aws_region}")
         return experiment
     except Exception as e:
         logger.error(f"Error starting experiment: {str(e)}")
         return None
 
-def get_experiment_status(experiment_id):
+def get_experiment_status(experiment_id, region):
     """
     Get the current status of an experiment.
     
     Args:
         experiment_id: AWS FIS experiment ID
+        region: AWS region where the experiment is running
         
     Returns:
         experiment data dictionary or None if error occurs
     """
     try:
-        client = boto3.client('fis')
+        client = boto3.client('fis', region_name=region)
         response = client.get_experiment(id=experiment_id)
         return response['experiment']
     except Exception as e:
@@ -116,14 +145,20 @@ def refresh_experiments():
         
     updated_experiments = []
     for experiment in st.session_state.experiments:
-        updated_exp = get_experiment_status(experiment['id'])
+        # Use the region stored with the experiment
+        region = experiment.get('_region', st.session_state.aws_region)
+        updated_exp = get_experiment_status(experiment['id'], region)
+        
         if updated_exp:
             # Preserve our custom fields
             if '_startRequestTime' in experiment:
                 updated_exp['_startRequestTime'] = experiment['_startRequestTime']
+            if '_region' in experiment:
+                updated_exp['_region'] = experiment['_region']
             updated_experiments.append(updated_exp)
         else:
             updated_experiments.append(experiment)  # Keep original if refresh failed
+    
     st.session_state.experiments = updated_experiments
     logger.info(f"Refreshed status of {len(updated_experiments)} experiments")
 
@@ -154,20 +189,21 @@ def format_status_with_duration(experiment):
         
     return f"{status.upper()}{duration}"
 
-def stop_experiment(experiment_id):
+def stop_experiment(experiment_id, region):
     """
     Stop an in-progress experiment.
     
     Args:
         experiment_id: AWS FIS experiment ID
+        region: AWS region where the experiment is running
         
     Returns:
         True if successful, False otherwise
     """
     try:
-        client = boto3.client('fis')
+        client = boto3.client('fis', region_name=region)
         client.stop_experiment(id=experiment_id)
-        logger.info(f"Stop request sent for experiment {experiment_id}")
+        logger.info(f"Stop request sent for experiment {experiment_id} in region {region}")
         return True
     except Exception as e:
         logger.error(f"Error stopping experiment: {str(e)}")
@@ -176,7 +212,25 @@ def stop_experiment(experiment_id):
 def display_sidebar():
     """Display and handle sidebar UI elements."""
     with st.sidebar:
+        st.image("https://a0.awsstatic.com/libra-css/images/logos/aws_logo_smile_1200x630.png", width=100)
         st.title("Experiment Controls")
+        
+        # Region selector
+        st.header("AWS Region")
+        selected_region = st.selectbox(
+            "Select AWS Region",
+            options=AWS_REGIONS,
+            index=AWS_REGIONS.index(st.session_state.aws_region),
+            format_func=lambda x: f"{x} (AWS {x.split('-')[0].upper()} {x.split('-')[1]})"
+        )
+        
+        # Update region if changed
+        if selected_region != st.session_state.aws_region:
+            st.session_state.aws_region = selected_region
+            logger.info(f"Region changed to {selected_region}")
+            st.success(f"Region set to {selected_region}")
+            
+        st.divider()
         
         # Experiment starters
         st.header("Start New Experiment")
@@ -204,15 +258,13 @@ def display_sidebar():
             st.session_state.refresh_interval = refresh_interval
         
         st.session_state.auto_refresh = auto_refresh
-        
 
         if st.button("Refresh Now", use_container_width=True):
             with st.spinner("Refreshing..."):
                 refresh_experiments()
-    
-
+        
         common.render_sidebar()
-
+        
 def display_experiments():
     """Display experiment data in the main area."""
     st.header("Active Experiments", help="Displays all active and recent experiments")
@@ -248,6 +300,7 @@ def display_experiments():
             "ID": exp['id'],
             "Template ID": exp['experimentTemplateId'],
             "Status": status.upper(),
+            "Region": exp.get('_region', 'Unknown'),
             "Start Time": start_time_display,
             "Request Time": exp.get('_startRequestTime', 'Unknown')
         })
@@ -264,12 +317,17 @@ def display_experiments():
                 help="Current status of the experiment",
                 width="medium",
             ),
+            "Region": st.column_config.TextColumn(
+                "Region",
+                help="AWS region where the experiment is running",
+                width="small",
+            ),
         },
         hide_index=True,
     )
     
     # Create tabs for detailed experiment information
-    tabs = st.tabs([f"Exp: {exp['id'][-8:]}" for exp in st.session_state.experiments])
+    tabs = st.tabs([f"Exp: {exp['id'][-8:]} ({exp.get('_region', 'unknown')})" for exp in st.session_state.experiments])
     
     for i, tab in enumerate(tabs):
         with tab:
@@ -282,12 +340,16 @@ def display_experiment_details(exp):
     Args:
         exp: Experiment data dictionary
     """
+    # Get experiment's region
+    region = exp.get('_region', st.session_state.aws_region)
+    
     # Create columns for key info and actions
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
         st.subheader(f"Experiment: {exp['id']}")
         st.caption(f"Template: {exp['experimentTemplateId']}")
+        st.caption(f"Region: {region}")
     
     with col2:
         # Ensure status is accessible
@@ -310,7 +372,7 @@ def display_experiment_details(exp):
         if exp.get('state', {}).get('status') in ['running', 'initiating']:
             if st.button("⚠️ Stop Experiment", key=f"stop_{exp['id']}", type="primary"):
                 with st.spinner("Stopping experiment..."):
-                    if stop_experiment(exp['id']):
+                    if stop_experiment(exp['id'], region):
                         st.success("Stop request sent")
                         time.sleep(1)
                         refresh_experiments()
@@ -489,4 +551,3 @@ if __name__ == "__main__":
     # If authenticated, show the main app content
     if is_authenticated:
         main()
- 
