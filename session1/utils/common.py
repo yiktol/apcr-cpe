@@ -2,6 +2,18 @@ import streamlit as st
 import uuid
 from datetime import datetime
 
+
+
+def initialize_session_state():
+    """Initialize session state variables if they don't exist."""
+    
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = str(uuid.uuid4())[:8]
+    
+    if "start_time" not in st.session_state:
+        st.session_state.start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+
 def reset_session():
     """Reset the session state"""
     for key in st.session_state.keys():
