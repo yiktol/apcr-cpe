@@ -12,6 +12,8 @@ import boto3
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import utils.authenticate as authenticate
+import utils.common as common
 
 # Configure logging
 logging.basicConfig(
@@ -30,6 +32,8 @@ st.set_page_config(
 
 def initialize_session_state():
     """Initialize session state variables if they don't exist."""
+    
+    common.initialize_session_state()
     if 'experiments' not in st.session_state:
         st.session_state.experiments = []
     if 'auto_refresh' not in st.session_state:
@@ -207,11 +211,7 @@ def display_sidebar():
                 refresh_experiments()
     
 
-        if st.button("Reset Session", use_container_width=True):
-            reset_session()
-            st.success("Session reset")
-            time.sleep(1)
-            st.rerun()
+        common.render_sidebar()
 
 def display_experiments():
     """Display experiment data in the main area."""
@@ -483,4 +483,10 @@ def main():
         st.info("Please try refreshing the page or resetting the session.")
 
 if __name__ == "__main__":
-    main()
+    # First check authentication
+    is_authenticated = authenticate.login()
+    
+    # If authenticated, show the main app content
+    if is_authenticated:
+        main()
+ 
